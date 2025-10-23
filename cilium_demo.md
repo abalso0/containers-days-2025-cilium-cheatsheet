@@ -104,7 +104,62 @@ kubectl run inventory-client -n inventory --image=curlimages/curl -- sleep infin
 
 Create `traffic-simulator.sh`:
 ```bash
-[Previous traffic simulator script content]
+cat <<EOF > traffic-simulator.sh
+#!/bin/bash
+
+# Wait for pods to be ready
+echo "Waiting for pods to be ready..."
+kubectl wait --for=condition=ready pod -l app=web-store -n online-store --timeout=60s
+kubectl wait --for=condition=ready pod -l app=payment -n payment-system --timeout=60s
+kubectl wait --for=condition=ready pod -l app=inventory -n inventory --timeout=60s
+
+# Create test pods if they don't exist
+kubectl run -n online-store load-gen-1 --image=curlimages/curl -- sleep infinity
+kubectl run -n online-store load-gen-2 --image=curlimages/curl -- sleep infinity
+kubectl run -n payment-system payment-test --image=curlimages/curl -- sleep infinity
+
+# Wait for test pods to be ready
+echo "Waiting for test pods to be ready..."
+sleep 10
+
+# Function to generate random sleep interval
+random_sleep() {
+    sleep 0.$((RANDOM % 5))
+}
+
+# Function to generate various types of traffic
+generate_diverse_traffic() {
+    while true
+    do
+        echo "Generating traffic patterns..."
+        
+        # Test web-store to payment-processor
+        kubectl exec -n online-store load-gen-1 -- curl -s payment-processor.payment-system.svc.cluster.local
+        random_sleep
+        
+        # Test web-store to inventory
+        kubectl exec -n online-store load-gen-2 -- curl -s inventory-service.inventory.svc.cluster.local
+        random_sleep
+        
+        # Test unauthorized access
+        kubectl exec -n default test-pod -- curl -s web-store.online-store.svc.cluster.local
+        random_sleep
+        
+        # Test payment to web-store
+        kubectl exec -n payment-system payment-test -- curl -s web-store.online-store.svc.cluster.local
+        random_sleep
+        
+        # Test inventory to payment
+        kubectl exec -n inventory inventory-client -- curl -s payment-processor.payment-system.svc.cluster.local
+        random_sleep
+        
+        echo "Completed traffic cycle"
+        sleep 2
+    done
+}
+
+generate_diverse_traffic
+EOF
 ```
 
 Make it executable:
