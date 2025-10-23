@@ -1,6 +1,6 @@
 # Cilium Demo in Kubernetes
 
-## 1. Prerequisites Installation on Amazon Linux 2 EC2
+## 1. Prerequisites Installation 
 
 ### Docker Installation
 ```bash
